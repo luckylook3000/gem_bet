@@ -18,14 +18,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install discord.py python-dotenv
-      - name: Test with pytest (treat exit code 5 as success)
+      - name: Test with pytest (skip if no tests)
         run: |
-          pytest || if [ $? -eq 5 ]; then echo "✅ No tests found - skipping (expected)"; else exit $?; fi
+          # If no test files exist, skip silently
+          if [ -f test_*.py ] || [ -d tests ] || grep -r "def test_" . --include="*.py" > /dev/null 2>&1; then
+            pytest -v
+          else
+            echo "✅ No tests found - skipping (expected for bot)"
+          fi
       - name: Run Bot
         env:
           TOKEN: ${{ secrets.TOKEN }}
