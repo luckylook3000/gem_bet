@@ -1,0 +1,14 @@
+# Environment variables (CRITICAL FOR TOKEN SAFETY)
+.env
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Discord bot data
+balances.json
