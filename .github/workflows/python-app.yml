@@ -35,5 +35,9 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest
-      run: |
-        pytest
+  run: |
+    if [ -f test_*.py ] || [ -d tests ] || grep -r "def test_" . --include="*.py" > /dev/null 2>&1; then
+      pytest
+    else
+      echo "No tests found - skipping pytest (expected for bot setup)"
+    fi
