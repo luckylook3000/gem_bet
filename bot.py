@@ -1,5 +1,6 @@
 import os
 import discord
+import random
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -17,8 +18,8 @@ class GemBetBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # Load the Casino cog
-        await self.add_cog(Casino(bot))
+        # FIXED: Changed 'bot' to 'self' to prevent the build error
+        await self.add_cog(casino.Casino(self)) 
         await self.tree.sync()
         print("✅ Casino Loaded & Slash commands synced!")
 
@@ -90,5 +91,3 @@ async def on_ready():
     print(f'👑 Gem Bet is ONLINE as {bot.user}')
 
 bot.run(TOKEN)
-
-
