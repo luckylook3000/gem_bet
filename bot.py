@@ -6,9 +6,8 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import economy
 
-# Setup
 load_dotenv()
-TOKEN = os.getenv("TOKEN") # Pulls from Replit Secrets 🔒
+TOKEN = os.getenv("TOKEN")
 
 class GemBetBot(commands.Bot):
     def __init__(self):
@@ -18,17 +17,24 @@ class GemBetBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # This syncs the / commands to your server
+        # This syncs globally (slow)
         await self.tree.sync()
-        print("✅ Slash commands synced to Discord!")
+        print("✅ Global Slash commands synced!")
 
 bot = GemBetBot()
 
-# --- HELP EMBED ---
 def get_casino_embed(title, description, color=0x2f3136):
     embed = discord.Embed(title=title, description=description, color=color)
     embed.set_footer(text="💎 Gem Bet | 18+ Virtual Gambling")
     return embed
+
+# --- ADMIN SYNC COMMAND (THE SECRET WEAPON) ---
+@bot.command()
+@commands.is_owner() # Only you can use this
+async def sync(ctx):
+    """Force syncs slash commands to the current server instantly"""
+    await bot.tree.sync(guild=ctx.guild)
+    await ctx.send("🚀 **Slash commands forced to sync! Restart your Discord app and type `/`**")
 
 # --- SLASH COMMANDS ---
 
@@ -36,11 +42,7 @@ def get_casino_embed(title, description, color=0x2f3136):
 async def balance(interaction: discord.Interaction, member: discord.Member = None):
     target = member or interaction.user
     bal = economy.get_balance(target.id)
-    await interaction.response.send_message(embed=get_casino_embed(
-        "💰 Balance Check", 
-        f"{target.mention} has **{bal}** coins in their vault.",
-        0x00ff00 # Green
-    ))
+    await interaction.response.send_message(embed=get_casino_embed("💰 Balance Check", f"{target.mention} has **{bal}** coins.", 0x00ff00))
 
 @bot.tree.command(name="dice", description="Bet on high (4-6) or low (1-3)")
 @app_commands.choices(choice=[
@@ -64,51 +66,35 @@ async def dice(interaction: discord.Interaction, bet: int, choice: str):
         res = f"💀 **LOSS!** Rolled {roll}. You lost **{bet}** coins!"
         color = 0xff0000
 
-    await interaction.response.send_message(embed=get_casino_embed(
-        "🎲 Dice Roll", 
-        f"{interaction.user.mention} bet {bet} on {choice}...\n{res}\n\nNew Balance: **{economy.get_balance(interaction.user.id)}**",
-        color
-    ))
+    await interaction.response.send_message(embed=get_casino_embed("🎲 Dice Roll", f"{interaction.user.mention} bet {bet} on {choice}...\n{res}\n\nBalance: **{economy.get_balance(interaction.user.id)}**", color))
 
 @bot.tree.command(name="rain", description="Distribute coins to random online users")
-@commands.has_permissions(administrator=True) # Only admins can rain
 async def rain(interaction: discord.Interaction, amount: int, recipients: int = 5):
-    if amount <= 0: return await interaction.response.send_message("Amount must be positive!")
+    # Add permission check manually since it's a slash command
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌ Only admins can rain coins!", ephemeral=True)
     
     members = [m for m in interaction.guild.members if not m.bot and m.status != discord.Status.offline]
     if len(members) < recipients:
-        return await interaction.response.send_message(f"Not enough online members! Need {recipients}.")
+        return await interaction.response.send_message(f"Not enough online members!")
 
     lucky_users = random.sample(members, recipients)
     per_person = amount // recipients
-    
-    for user in lucky_users:
-        economy.update_balance(user.id, per_person)
+    for user in lucky_users: economy.update_balance(user.id, per_person)
     
     mentions = " ".join([u.mention for u in lucky_users])
-    await interaction.response.send_message(embed=get_casino_embed(
-        "💸 RAIN!", 
-        f"{interaction.user.mention} rained **{amount}** coins!\n{recipients} users got **{per_person}** each!\n\n{mentions}",
-        0x3498db # Blue
-    ))
+    await interaction.response.send_message(embed=get_casino_embed("💸 RAIN!", f"{interaction.user.mention} rained **{amount}** coins!\n{recipients} users got **{per_person}** each!\n\n{mentions}", 0x3498db))
 
 @bot.tree.command(name="tip", description="Tip another user")
 async def tip(interaction: discord.Interaction, member: discord.Member, amount: int):
     if member.id == interaction.user.id:
         return await interaction.response.send_message("You can't tip yourself!", ephemeral=True)
-    
     bal = economy.get_balance(interaction.user.id)
     if amount > bal or amount <= 0:
         return await interaction.response.send_message("❌ Insufficient funds!", ephemeral=True)
-
     economy.update_balance(interaction.user.id, -amount)
     economy.update_balance(member.id, amount)
-    
-    await interaction.response.send_message(embed=get_casino_embed(
-        "💸 Tip Sent", 
-        f"{interaction.user.mention} tipped {member.mention} **{amount}** coins!",
-        0xf1c40f # Gold
-    ))
+    await interaction.response.send_message(embed=get_casino_embed("💸 Tip Sent", f"{interaction.user.mention} tipped {member.mention} **{amount}** coins!", 0xf1c40f))
 
 @bot.tree.command(name="redeem", description="Redeem a promo code")
 async def redeem(interaction: discord.Interaction, code: str):
@@ -117,17 +103,12 @@ async def redeem(interaction: discord.Interaction, code: str):
     if code in codes:
         reward = codes[code]
         economy.update_balance(interaction.user.id, reward)
-        await interaction.response.send_message(embed=get_casino_embed(
-            "🎉 Code Redeemed", 
-            f"You used `{code}` and won **{reward}** coins!", 
-            0x00ff00
-        ))
+        await interaction.response.send_message(embed=get_casino_embed("🎉 Code Redeemed", f"You used `{code}` and won **{reward}** coins!", 0x00ff00))
     else:
         await interaction.response.send_message("❌ Invalid code!", ephemeral=True)
 
 @bot.event
 async def on_ready():
     print(f'👑 Gem Bet is ONLINE as {bot.user}')
-    print("🚀 Slash commands have been synced!")
 
 bot.run(TOKEN)
