@@ -1,7 +1,5 @@
 import json
 import os
-import random
-import discord
 
 DATA_FILE = "balances.json"
 
@@ -17,7 +15,7 @@ def save_balances(balances):
 
 def get_balance(user_id):
     balances = load_balances()
-    return balances.get(str(user_id), 1000) # Default 1000 coins
+    return balances.get(str(user_id), 1000) # Start with 1000
 
 def update_balance(user_id, amount):
     balances = load_balances()
@@ -25,7 +23,3 @@ def update_balance(user_id, amount):
     balances[user_id] = balances.get(user_id, 1000) + amount
     save_balances(balances)
     return balances[user_id]
-
-# Promo Codes
-PROMO_CODES = {"GEMBET100": 100, "KING": 500, "WINNER": 200}
-USED_CODES = set() 
