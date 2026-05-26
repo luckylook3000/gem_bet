@@ -17,8 +17,7 @@ class GemBetBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # This syncs globally (slow)
-        await self.tree.sync()
+        await self.tree.sync() 
         print("✅ Global Slash commands synced!")
 
 bot = GemBetBot()
@@ -28,15 +27,14 @@ def get_casino_embed(title, description, color=0x2f3136):
     embed.set_footer(text="💎 Gem Bet | 18+ Virtual Gambling")
     return embed
 
-# --- ADMIN SYNC COMMAND (THE SECRET WEAPON) ---
+# --- ADMIN SYNC (Everyone can use this to fix the / menu) ---
 @bot.command()
-@commands.is_owner() # Only you can use this
 async def sync(ctx):
-    """Force syncs slash commands to the current server instantly"""
+    """Force syncs slash commands to this server instantly"""
     await bot.tree.sync(guild=ctx.guild)
-    await ctx.send("🚀 **Slash commands forced to sync! Restart your Discord app and type `/`**")
+    await ctx.send("🚀 **Commands Synced! Restart your Discord (Ctrl+R) and type `/`**")
 
-# --- SLASH COMMANDS ---
+# --- PUBLIC COMMANDS (Everyone can use) ---
 
 @bot.tree.command(name="balance", description="Check your coin balance")
 async def balance(interaction: discord.Interaction, member: discord.Member = None):
@@ -68,23 +66,6 @@ async def dice(interaction: discord.Interaction, bet: int, choice: str):
 
     await interaction.response.send_message(embed=get_casino_embed("🎲 Dice Roll", f"{interaction.user.mention} bet {bet} on {choice}...\n{res}\n\nBalance: **{economy.get_balance(interaction.user.id)}**", color))
 
-@bot.tree.command(name="rain", description="Distribute coins to random online users")
-async def rain(interaction: discord.Interaction, amount: int, recipients: int = 5):
-    # Add permission check manually since it's a slash command
-    if not interaction.user.guild_permissions.administrator:
-        return await interaction.response.send_message("❌ Only admins can rain coins!", ephemeral=True)
-    
-    members = [m for m in interaction.guild.members if not m.bot and m.status != discord.Status.offline]
-    if len(members) < recipients:
-        return await interaction.response.send_message(f"Not enough online members!")
-
-    lucky_users = random.sample(members, recipients)
-    per_person = amount // recipients
-    for user in lucky_users: economy.update_balance(user.id, per_person)
-    
-    mentions = " ".join([u.mention for u in lucky_users])
-    await interaction.response.send_message(embed=get_casino_embed("💸 RAIN!", f"{interaction.user.mention} rained **{amount}** coins!\n{recipients} users got **{per_person}** each!\n\n{mentions}", 0x3498db))
-
 @bot.tree.command(name="tip", description="Tip another user")
 async def tip(interaction: discord.Interaction, member: discord.Member, amount: int):
     if member.id == interaction.user.id:
@@ -98,7 +79,7 @@ async def tip(interaction: discord.Interaction, member: discord.Member, amount: 
 
 @bot.tree.command(name="redeem", description="Redeem a promo code")
 async def redeem(interaction: discord.Interaction, code: str):
-    codes = {"GEMBET100": 100, "KING": 500}
+    codes = {"GEMBET100": 100, "KING": 500, "TRIAL": 50}
     code = code.upper()
     if code in codes:
         reward = codes[code]
@@ -107,8 +88,38 @@ async def redeem(interaction: discord.Interaction, code: str):
     else:
         await interaction.response.send_message("❌ Invalid code!", ephemeral=True)
 
+# --- MOD/ADMIN ONLY COMMANDS ---
+
+@bot.tree.command(name="add", description="[MOD] Add coins to a user")
+async def add(interaction: discord.Interaction, member: discord.Member, amount: int):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌ You aren't a Mod!", ephemeral=True)
+    economy.update_balance(member.id, amount)
+    await interaction.response.send_message(embed=get_casino_embed("➕ Coins Added", f"Added **{amount}** coins to {member.mention}.", 0x00ff00))
+
+@bot.tree.command(name="remove", description="[MOD] Remove coins from a user")
+async def remove(interaction: discord.Interaction, member: discord.Member, amount: int):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌ You aren't a Mod!", ephemeral=True)
+    economy.update_balance(member.id, -amount)
+    await interaction.response.send_message(embed=get_casino_embed("➖ Coins Removed", f"Removed **{amount}** coins from {member.mention}.", 0xff0000))
+
+@bot.tree.command(name="rain", description="[MOD] Rain coins to online users")
+async def rain(interaction: discord.Interaction, amount: int, recipients: int = 5):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌ You aren't a Mod!", ephemeral=True)
+    members = [m for m in interaction.guild.members if not m.bot and m.status != discord.Status.offline]
+    if len(members) < recipients:
+        return await interaction.response.send_message("Not enough online members!")
+    lucky = random.sample(members, recipients)
+    per_person = amount // recipients
+    for u in lucky: economy.update_balance(u.id, per_person)
+    mentions = " ".join([u.mention for u in lucky])
+    await interaction.response.send_message(embed=get_casino_embed("💸 RAIN!", f"{interaction.user.mention} rained **{amount}** coins!\n{recipients} users got **{per_person}** each!\n\n{mentions}", 0x3498db))
+
 @bot.event
 async def on_ready():
     print(f'👑 Gem Bet is ONLINE as {bot.user}')
 
 bot.run(TOKEN)
+
