@@ -4,9 +4,12 @@ import random
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
-import economy
-import casino # This imports the casino.py file
 
+# Import your other files
+import economy
+import casino 
+
+# Load Secrets from Replit 🔒
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
@@ -18,25 +21,33 @@ class GemBetBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
-        # FIXED: Changed 'bot' to 'self' to prevent the build error
-        await self.add_cog(casino.Casino(self)) 
+        # FIXED: Correctly loading the Casino cog from casino.py
+        await self.add_cog(casino.Casino(self))
+        
+        # Syncs slash commands to Discord
         await self.tree.sync()
-        print("✅ Casino Loaded & Slash commands synced!")
+        print("✅ Casino Cog Loaded & Slash commands synced!")
 
 bot = GemBetBot()
 
+# Fancy Embed Helper
 def get_casino_embed(title, desc, color=0x2f3136):
     embed = discord.Embed(title=title, description=desc, color=color)
     embed.set_footer(text="GemBet💎 | Virtual Games")
     return embed
 
-# --- ADMIN SYNC ---
+# --- ADMIN SYNC COMMAND ---
+# Use !sync in Discord to force / commands to appear instantly
 @bot.command()
 async def sync(ctx):
-    await bot.tree.sync(guild=ctx.guild)
-    await ctx.send("🚀 **Commands Synced! Restart Discord (Ctrl+R) and use `/`**")
+    try:
+        await bot.tree.sync(guild=ctx.guild)
+        await ctx.send("🚀 **Commands Synced! Restart Discord (Ctrl+R) and type `/`**")
+    except Exception as e:
+        await ctx.send(f"❌ Sync failed: {e}")
 
-# --- PUBLIC ECONOMY ---
+# --- PUBLIC SLASH COMMANDS ---
+
 @bot.tree.command(name="balance", description="Check your coin balance")
 async def balance(interaction: discord.Interaction, member: discord.Member = None):
     target = member or interaction.user
@@ -45,16 +56,20 @@ async def balance(interaction: discord.Interaction, member: discord.Member = Non
 
 @bot.tree.command(name="tip", description="Tip another user")
 async def tip(interaction: discord.Interaction, member: discord.Member, amount: int):
-    if member.id == interaction.user.id: return await interaction.response.send_message("Can't tip yourself!", ephemeral=True)
+    if member.id == interaction.user.id: 
+        return await interaction.response.send_message("You can't tip yourself!", ephemeral=True)
+    
     bal = economy.get_balance(interaction.user.id)
-    if amount > bal or amount <= 0: return await interaction.response.send_message("❌ Insufficient funds!", ephemeral=True)
+    if amount > bal or amount <= 0: 
+        return await interaction.response.send_message("❌ Insufficient funds!", ephemeral=True)
+    
     economy.update_balance(interaction.user.id, -amount)
     economy.update_balance(member.id, amount)
     await interaction.response.send_message(embed=get_casino_embed("💸 Tip Sent", f"{interaction.user.mention} tipped {member.mention} **{amount}** coins!", 0xf1c40f))
 
 @bot.tree.command(name="redeem", description="Redeem a promo code")
 async def redeem(interaction: discord.Interaction, code: str):
-    codes = {"GEMBET100": 100, "KING": 500}
+    codes = {"GEMBET100": 100, "KING": 500, "TRIAL": 50}
     code = code.upper()
     if code in codes:
         reward = codes[code]
@@ -63,31 +78,41 @@ async def redeem(interaction: discord.Interaction, code: str):
     else:
         await interaction.response.send_message("❌ Invalid code!", ephemeral=True)
 
-# --- MOD ONLY ---
-@bot.tree.command(name="add", description="[MOD] Add coins")
+# --- MOD ONLY SLASH COMMANDS ---
+
+@bot.tree.command(name="add", description="[MOD] Add coins to a user")
 async def add(interaction: discord.Interaction, member: discord.Member, amount: int):
-    if not interaction.user.guild_permissions.administrator: return await interaction.response.send_message("❌ Not a Mod!", ephemeral=True)
+    if not interaction.user.guild_permissions.administrator: 
+        return await interaction.response.send_message("❌ You aren't a Mod!", ephemeral=True)
     economy.update_balance(member.id, amount)
     await interaction.response.send_message(embed=get_casino_embed("➕ Added", f"Added **{amount}** coins to {member.mention}.", 0x00ff00))
 
-@bot.tree.command(name="remove", description="[MOD] Remove coins")
+@bot.tree.command(name="remove", description="[MOD] Remove coins from a user")
 async def remove(interaction: discord.Interaction, member: discord.Member, amount: int):
-    if not interaction.user.guild_permissions.administrator: return await interaction.response.send_message("❌ Not a Mod!", ephemeral=True)
+    if not interaction.user.guild_permissions.administrator: 
+        return await interaction.response.send_message("❌ You aren't a Mod!", ephemeral=True)
     economy.update_balance(member.id, -amount)
     await interaction.response.send_message(embed=get_casino_embed("➖ Removed", f"Removed **{amount}** coins from {member.mention}.", 0xff0000))
 
-@bot.tree.command(name="rain", description="[MOD] Rain coins")
+@bot.tree.command(name="rain", description="[MOD] Rain coins to online users")
 async def rain(interaction: discord.Interaction, amount: int, recipients: int = 5):
-    if not interaction.user.guild_permissions.administrator: return await interaction.response.send_message("❌ Not a Mod!", ephemeral=True)
+    if not interaction.user.guild_permissions.administrator: 
+        return await interaction.response.send_message("❌ You aren't a Mod!", ephemeral=True)
+    
     members = [m for m in interaction.guild.members if not m.bot and m.status != discord.Status.offline]
-    if len(members) < recipients: return await interaction.response.send_message("Not enough online members!")
+    if len(members) < recipients: 
+        return await interaction.response.send_message("Not enough online members!")
+    
     lucky = random.sample(members, recipients)
     per_person = amount // recipients
     for u in lucky: economy.update_balance(u.id, per_person)
-    await interaction.response.send_message(embed=get_casino_embed("💸 RAIN!", f"{interaction.user.mention} rained **{amount}** coins!\n{recipients} users got **{per_person}** each!", 0x3498db))
+    
+    mentions = " ".join([u.mention for u in lucky])
+    await interaction.response.send_message(embed=get_casino_embed("💸 RAIN!", f"{interaction.user.mention} rained **{amount}** coins!\n{recipients} users got **{per_person}** each!\n\n{mentions}", 0x3498db))
 
 @bot.event
 async def on_ready():
     print(f'👑 Gem Bet is ONLINE as {bot.user}')
+    print("🚀 System Ready. Use !sync in Discord to refresh slash commands.")
 
 bot.run(TOKEN)
